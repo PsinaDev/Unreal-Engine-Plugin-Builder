@@ -380,9 +380,10 @@ class SettingsDialog(QDialog):
             for version, info in found.items():
                 self._engines[version] = str(info.path)
             self._populate_engines()
+            message = tr("found_engines", count=len(found)) + "\n\n" + tr("found_engines_hint")
             MessageDialog.information(
                 self, tr("scan_for_engines"),
-                tr("found_engines", count=len(found))
+                message
             )
         else:
             MessageDialog.information(

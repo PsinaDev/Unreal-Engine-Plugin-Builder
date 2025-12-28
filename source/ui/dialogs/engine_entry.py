@@ -415,7 +415,7 @@ class EngineEntryDialog(QDialog):
                 self._engines[version] = str(info.path)
             
             self._populate_list()
-            self._status_label.setText(tr("found_engines", count=len(found)))
+            self._status_label.setText(tr("found_engines", count=len(found)) + ". " + tr("found_engines_hint"))
             self._status_label.setStyleSheet(f"color: {COLORS['success']};")
         else:
             self._status_label.setText(tr("no_engines_found"))

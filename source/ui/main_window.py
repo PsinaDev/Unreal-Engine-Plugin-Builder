@@ -523,6 +523,10 @@ class MainWindow(QMainWindow):
         """Handle show event - add Windows styles for Aero Snap."""
         super().showEvent(event)
         
+        # Save initial geometry
+        if self._normal_geometry is None:
+            self._normal_geometry = self.geometry()
+        
         if sys.platform == "win32":
             self._setup_windows_aero_snap()
     
@@ -754,43 +758,62 @@ class MainWindow(QMainWindow):
         return header
     
     def _toggle_maximize(self) -> None:
-        """Toggle window maximize state."""
-        if self._maximized_state:
-            # Restore to normal
-            self._maximized_state = False
+        """Toggle window maximize state using native Windows API for consistency with Aero Snap."""
+        if sys.platform == "win32":
+            # Use Windows API directly - same as Aero Snap does internally
+            import ctypes
+            SW_MAXIMIZE = 3
+            SW_RESTORE = 9
+            hwnd = int(self.winId())
             
-            # Always call showNormal() first to clear Windows maximize state
-            # (needed after Aero Snap which sets WindowMaximized flag)
-            self.showNormal()
-            
-            # Then restore our saved geometry if available
-            if self._normal_geometry and self._normal_geometry.isValid():
-                self.setGeometry(self._normal_geometry)
-            
-            self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
-        else:
-            # Maximize - store geometry first
-            self._normal_geometry = self.geometry()
-            self._maximized_state = True
-            # Get available screen geometry (excluding taskbar)
-            screen = QApplication.primaryScreen()
-            if screen:
-                available = screen.availableGeometry()
-                self.setGeometry(available)
+            if self._maximized_state:
+                # Restore - save will happen via moveEvent/resizeEvent
+                ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
+                
+                # Restore geometry, adjusting for current monitor
+                if self._normal_geometry and self._normal_geometry.isValid():
+                    current_screen = QApplication.screenAt(self.geometry().center())
+                    if not current_screen:
+                        current_screen = QApplication.primaryScreen()
+                    
+                    if current_screen:
+                        screen_geo = current_screen.availableGeometry()
+                        new_width = min(self._normal_geometry.width(), screen_geo.width())
+                        new_height = min(self._normal_geometry.height(), screen_geo.height())
+                        new_x = screen_geo.x() + (screen_geo.width() - new_width) // 2
+                        new_y = screen_geo.y() + (screen_geo.height() - new_height) // 2
+                        self.setGeometry(new_x, new_y, new_width, new_height)
             else:
+                # Maximize
+                ctypes.windll.user32.ShowWindow(hwnd, SW_MAXIMIZE)
+            
+            # State and icon will be updated by changeEvent (same as Aero Snap)
+        else:
+            # Fallback for non-Windows
+            if self._maximized_state:
+                self.showNormal()
+                if self._normal_geometry and self._normal_geometry.isValid():
+                    self.setGeometry(self._normal_geometry)
+                self._maximized_state = False
+            else:
+                self._maximized_state = True
                 self.showMaximized()
-            self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
+            self._update_maximize_icon()
     
     def _update_maximize_icon(self) -> None:
         """Update maximize button icon based on current state."""
-        if self._maximized_state:
+        state = self.windowState()
+        is_maximized = bool(state & Qt.WindowState.WindowMaximized)
+        
+        if is_maximized:
             self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
         else:
             self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
     
     def _get_resize_edge(self, pos: QPoint) -> Optional[str]:
         """Determine which edge/corner for resize based on position."""
-        if self._maximized_state:
+        state = self.windowState()
+        if state & Qt.WindowState.WindowMaximized:
             return None
         
         rect = self.rect()
@@ -1429,7 +1452,10 @@ class MainWindow(QMainWindow):
                 title_height = 40
                 
                 # Check resize edges (only when not maximized)
-                if not self._maximized_state:
+                win_state = self.windowState()
+                is_maximized = bool(win_state & Qt.WindowState.WindowMaximized)
+                
+                if not is_maximized:
                     # Corners first
                     if rel_x < border and rel_y < border:
                         return True, HTTOPLEFT
@@ -1465,24 +1491,32 @@ class MainWindow(QMainWindow):
     def changeEvent(self, event: QEvent) -> None:
         """Handle window state changes (maximize via Windows snap, etc.)."""
         if event.type() == QEvent.Type.WindowStateChange:
-            # Get the OLD state from the event (before change)
             old_state = event.oldState() if hasattr(event, 'oldState') else Qt.WindowState.WindowNoState
             new_state = self.windowState()
             
             was_maximized = bool(old_state & Qt.WindowState.WindowMaximized)
             is_maximized = bool(new_state & Qt.WindowState.WindowMaximized)
             
-            # If going FROM normal TO maximized (Aero Snap), save geometry
-            if not was_maximized and is_maximized:
-                # Use normalGeometry() which Qt maintains
-                normal_geo = self.normalGeometry()
-                if normal_geo.isValid() and normal_geo.width() > 100:
-                    self._normal_geometry = normal_geo
-            
             # Update state and icon
             self._maximized_state = is_maximized
             self._update_maximize_icon()
         super().changeEvent(event)
+    
+    def moveEvent(self, event) -> None:
+        """Save geometry when window is moved (not maximized)."""
+        # Check actual window state, not our flag (more reliable)
+        state = self.windowState()
+        if not (state & Qt.WindowState.WindowMaximized):
+            self._normal_geometry = self.geometry()
+        super().moveEvent(event)
+    
+    def resizeEvent(self, event) -> None:
+        """Save geometry when window is resized (not maximized)."""
+        # Check actual window state, not our flag (more reliable)
+        state = self.windowState()
+        if not (state & Qt.WindowState.WindowMaximized):
+            self._normal_geometry = self.geometry()
+        super().resizeEvent(event)
     
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close."""

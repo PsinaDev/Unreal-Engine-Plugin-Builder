@@ -133,13 +133,35 @@ class WindowsHandler(PlatformHandler):
         return paths
 
     def get_standard_install_paths(self) -> List[Path]:
-        return [
+        """Get standard installation paths including all available drives."""
+        paths = [
             Path("C:/Program Files/Epic Games"),
             Path("C:/Epic Games"),
             Path.home() / "Epic Games",
-            Path("D:/Epic Games"),
-            Path("E:/Epic Games"),
         ]
+        
+        # Scan all available drives for common UE folder names
+        try:
+            import string
+            common_folders = ["Epic Games", "Engines", "UnrealEngine", "UE", "Unreal"]
+            
+            for letter in string.ascii_uppercase:
+                drive = Path(f"{letter}:/")
+                if drive.exists():
+                    # Add drive root common folders
+                    for folder in common_folders:
+                        folder_path = drive / folder
+                        if folder_path.exists() and folder_path.is_dir():
+                            paths.append(folder_path)
+                    
+                    # Also check Program Files on other drives
+                    program_files = drive / "Program Files" / "Epic Games"
+                    if program_files.exists():
+                        paths.append(program_files)
+        except Exception:
+            pass
+        
+        return paths
 
     def get_config_dir(self) -> Path:
         local_appdata = os.environ.get("LOCALAPPDATA", "")
