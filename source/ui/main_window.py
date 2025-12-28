@@ -26,6 +26,24 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject, QPoint, QRect, QSize, QEvent
 from PySide6.QtGui import QCloseEvent, QPixmap, QCursor, QIcon
 
+# Windows native constants for Aero Snap support
+if sys.platform == "win32":
+    # Hit test values
+    HTCLIENT = 1
+    HTCAPTION = 2
+    HTLEFT = 10
+    HTRIGHT = 11
+    HTTOP = 12
+    HTTOPLEFT = 13
+    HTTOPRIGHT = 14
+    HTBOTTOM = 15
+    HTBOTTOMLEFT = 16
+    HTBOTTOMRIGHT = 17
+    
+    # Windows messages  
+    WM_NCHITTEST = 0x0084
+    WM_NCCALCSIZE = 0x0083
+
 from .styles import COLORS, FONTS, RADIUS, get_main_stylesheet
 from .icons import Icons
 from .widgets import (
@@ -469,16 +487,13 @@ class MainWindow(QMainWindow):
         self._status_reset_timer.setSingleShot(True)
         self._status_reset_timer.timeout.connect(self._reset_status)
         
-        # Window drag state
-        self._drag_pos: Optional[QPoint] = None
-        
-        # Resize state
+        # Resize state (fallback for non-Windows platforms)
         self._resize_edge: Optional[str] = None
         self._resize_start_pos: Optional[QPoint] = None
         self._resize_start_geometry: Optional[QRect] = None
         
-        # Manual maximize state tracking (FramelessWindowHint can mess with isMaximized())
-        self._is_maximized: bool = False
+        # Track maximize state manually (isMaximized() can be unreliable with frameless windows)
+        self._maximized_state: bool = False
         self._normal_geometry: Optional[QRect] = None
         
         self._setup_window()
@@ -491,7 +506,7 @@ class MainWindow(QMainWindow):
     def _setup_window(self) -> None:
         """Configure window properties."""
         self.setWindowTitle(tr("app_title"))
-        self.setMinimumSize(1000, 650)
+        self.setMinimumSize(1100, 650)
         self.resize(1200, 800)
         
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -503,6 +518,52 @@ class MainWindow(QMainWindow):
         icon_path = self._get_app_icon_path()
         if icon_path:
             self.setWindowIcon(QIcon(icon_path))
+    
+    def showEvent(self, event) -> None:
+        """Handle show event - add Windows styles for Aero Snap."""
+        super().showEvent(event)
+        
+        if sys.platform == "win32":
+            self._setup_windows_aero_snap()
+    
+    def _setup_windows_aero_snap(self) -> None:
+        """Set up Windows-specific styles for Aero Snap support."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # Window style constants
+            GWL_STYLE = -16
+            WS_THICKFRAME = 0x00040000
+            WS_MINIMIZEBOX = 0x00020000
+            WS_MAXIMIZEBOX = 0x00010000
+            WS_SYSMENU = 0x00080000
+            
+            hwnd = int(self.winId())
+            
+            # Get current style
+            style = ctypes.windll.user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
+            
+            # Add thick frame (needed for resize and snap)
+            # WS_SYSMENU needed for snap to work properly
+            # Do NOT add WS_CAPTION - it creates visible title bar
+            style |= WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU
+            
+            # Set the new style
+            ctypes.windll.user32.SetWindowLongPtrW(hwnd, GWL_STYLE, style)
+            
+            # Force window to update its frame
+            SWP_FRAMECHANGED = 0x0020
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOZORDER = 0x0004
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, None, 0, 0, 0, 0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+            )
+            
+        except Exception as e:
+            print(f"Failed to setup Windows Aero Snap: {e}")
     
     def _setup_ui(self) -> None:
         """Set up the main UI."""
@@ -694,18 +755,23 @@ class MainWindow(QMainWindow):
     
     def _toggle_maximize(self) -> None:
         """Toggle window maximize state."""
-        if self._is_maximized:
+        if self._maximized_state:
             # Restore to normal
-            self._is_maximized = False
-            if self._normal_geometry:
+            self._maximized_state = False
+            
+            # Always call showNormal() first to clear Windows maximize state
+            # (needed after Aero Snap which sets WindowMaximized flag)
+            self.showNormal()
+            
+            # Then restore our saved geometry if available
+            if self._normal_geometry and self._normal_geometry.isValid():
                 self.setGeometry(self._normal_geometry)
-            else:
-                self.showNormal()
+            
             self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
         else:
-            # Maximize
+            # Maximize - store geometry first
             self._normal_geometry = self.geometry()
-            self._is_maximized = True
+            self._maximized_state = True
             # Get available screen geometry (excluding taskbar)
             screen = QApplication.primaryScreen()
             if screen:
@@ -716,15 +782,15 @@ class MainWindow(QMainWindow):
             self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
     
     def _update_maximize_icon(self) -> None:
-        """Update maximize button icon based on current window state."""
-        if self._is_maximized:
+        """Update maximize button icon based on current state."""
+        if self._maximized_state:
             self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
         else:
             self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
     
     def _get_resize_edge(self, pos: QPoint) -> Optional[str]:
         """Determine which edge/corner for resize based on position."""
-        if self._is_maximized:
+        if self._maximized_state:
             return None
         
         rect = self.rect()
@@ -771,38 +837,14 @@ class MainWindow(QMainWindow):
             self.setCursor(Qt.CursorShape.ArrowCursor)  # Explicitly set arrow cursor
     
     def mousePressEvent(self, event) -> None:
-        """Handle mouse press for window dragging and resizing."""
+        """Handle mouse press for fallback resize handling."""
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.pos()
-            edge = self._get_resize_edge(pos)
-            
+            # Fallback resize handling (if nativeEvent doesn't catch it on non-Windows)
+            edge = self._get_resize_edge(event.pos())
             if edge:
-                # Use native system resize for proper behavior
-                edges_map = {
-                    "left": Qt.Edge.LeftEdge,
-                    "right": Qt.Edge.RightEdge,
-                    "top": Qt.Edge.TopEdge,
-                    "bottom": Qt.Edge.BottomEdge,
-                    "top-left": Qt.Edge.TopEdge | Qt.Edge.LeftEdge,
-                    "top-right": Qt.Edge.TopEdge | Qt.Edge.RightEdge,
-                    "bottom-left": Qt.Edge.BottomEdge | Qt.Edge.LeftEdge,
-                    "bottom-right": Qt.Edge.BottomEdge | Qt.Edge.RightEdge,
-                }
-                qt_edges = edges_map.get(edge)
-                if qt_edges and self.windowHandle():
-                    self.windowHandle().startSystemResize(qt_edges)
-                else:
-                    # Fallback to manual resize
-                    self._resize_edge = edge
-                    self._resize_start_pos = event.globalPosition().toPoint()
-                    self._resize_start_geometry = self.geometry()
-            elif hasattr(self, '_title_bar') and self._title_bar.geometry().contains(pos):
-                # Use native system move for proper Windows Snap support
-                if not self._is_maximized:
-                    self.windowHandle().startSystemMove()
-                else:
-                    # Store position for manual drag (to restore from maximized)
-                    self._drag_pos = event.globalPosition().toPoint()
+                self._resize_edge = edge
+                self._resize_start_pos = event.globalPosition().toPoint()
+                self._resize_start_geometry = self.geometry()
         
         super().mousePressEvent(event)
     
@@ -853,34 +895,6 @@ class MainWindow(QMainWindow):
                     geo.setHeight(min_h)
             
             self.setGeometry(geo)
-        elif self._drag_pos is not None and event.buttons() == Qt.MouseButton.LeftButton:
-            # Handle drag from maximized state - restore and start system move
-            if self._is_maximized:
-                # Calculate relative position within window before restore
-                old_width = self.width()
-                cursor_x = event.globalPosition().toPoint().x()
-                relative_x = cursor_x - self.pos().x()
-                ratio = relative_x / old_width if old_width > 0 else 0.5
-                
-                # Get normal width from stored geometry
-                normal_width = self._normal_geometry.width() if self._normal_geometry else 960
-                
-                # Restore window
-                self._is_maximized = False
-                if self._normal_geometry:
-                    # Position window so cursor stays at proportional position
-                    new_x = int(cursor_x - normal_width * ratio)
-                    new_y = max(0, event.globalPosition().toPoint().y() - 20)
-                    new_geo = QRect(new_x, new_y, self._normal_geometry.width(), self._normal_geometry.height())
-                    self.setGeometry(new_geo)
-                
-                # Update icon to normal state
-                self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
-                
-                # Clear drag pos and start native move
-                self._drag_pos = None
-                if self.windowHandle():
-                    self.windowHandle().startSystemMove()
         else:
             # Update cursor based on position
             edge = self._get_resize_edge(event.pos())
@@ -889,8 +903,7 @@ class MainWindow(QMainWindow):
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event) -> None:
-        """Handle mouse release for window dragging and resizing."""
-        self._drag_pos = None
+        """Handle mouse release for fallback resize handling."""
         self._resize_edge = None
         self._resize_start_pos = None
         self._resize_start_geometry = None
@@ -1351,9 +1364,124 @@ class MainWindow(QMainWindow):
             self._config.save_engines(engines_dict)
             self._search_engines()
     
+    def nativeEvent(self, eventType, message):
+        """
+        Handle native Windows messages for Aero Snap support.
+        """
+        if sys.platform != "win32":
+            return super().nativeEvent(eventType, message)
+        
+        # Check if this is a Windows message
+        if eventType != b"windows_generic_MSG":
+            return super().nativeEvent(eventType, message)
+        
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # Define MSG structure
+            class MSG(ctypes.Structure):
+                _fields_ = [
+                    ("hwnd", wintypes.HWND),
+                    ("message", wintypes.UINT),
+                    ("wParam", wintypes.WPARAM),
+                    ("lParam", wintypes.LPARAM),
+                    ("time", wintypes.DWORD),
+                    ("pt", wintypes.POINT),
+                ]
+            
+            # Get message from pointer
+            msg = MSG.from_address(int(message))
+            
+            # Handle WM_NCCALCSIZE - make client area cover entire window
+            if msg.message == WM_NCCALCSIZE:
+                # Return 0 to remove all non-client area (frame, title bar)
+                # This makes our custom title bar work
+                return True, 0
+            
+            # Handle WM_NCHITTEST
+            if msg.message == WM_NCHITTEST:
+                # Get cursor position in screen coordinates
+                x = msg.lParam & 0xFFFF
+                y = (msg.lParam >> 16) & 0xFFFF
+                
+                # Handle signed 16-bit values
+                if x > 32767:
+                    x -= 65536
+                if y > 32767:
+                    y -= 65536
+                
+                # Get window rect
+                hwnd = int(self.winId())
+                rect = wintypes.RECT()
+                ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                
+                # Convert to window-relative coordinates
+                rel_x = x - rect.left
+                rel_y = y - rect.top
+                w = rect.right - rect.left
+                h = rect.bottom - rect.top
+                
+                # Border margin for resize (in pixels)
+                border = 8
+                
+                # Title bar height
+                title_height = 40
+                
+                # Check resize edges (only when not maximized)
+                if not self._maximized_state:
+                    # Corners first
+                    if rel_x < border and rel_y < border:
+                        return True, HTTOPLEFT
+                    if rel_x > w - border and rel_y < border:
+                        return True, HTTOPRIGHT
+                    if rel_x < border and rel_y > h - border:
+                        return True, HTBOTTOMLEFT
+                    if rel_x > w - border and rel_y > h - border:
+                        return True, HTBOTTOMRIGHT
+                    
+                    # Edges
+                    if rel_x < border:
+                        return True, HTLEFT
+                    if rel_x > w - border:
+                        return True, HTRIGHT
+                    if rel_y < border:
+                        return True, HTTOP
+                    if rel_y > h - border:
+                        return True, HTBOTTOM
+                
+                # Title bar (excluding right side where buttons are)
+                buttons_width = 100
+                if rel_y < title_height and rel_x < w - buttons_width:
+                    return True, HTCAPTION
+                
+                return True, HTCLIENT
+                
+        except Exception as e:
+            print(f"nativeEvent error: {e}")
+        
+        return super().nativeEvent(eventType, message)
+    
     def changeEvent(self, event: QEvent) -> None:
         """Handle window state changes (maximize via Windows snap, etc.)."""
-        # Note: We use manual _is_maximized tracking, so changeEvent just calls parent
+        if event.type() == QEvent.Type.WindowStateChange:
+            # Get the OLD state from the event (before change)
+            old_state = event.oldState() if hasattr(event, 'oldState') else Qt.WindowState.WindowNoState
+            new_state = self.windowState()
+            
+            was_maximized = bool(old_state & Qt.WindowState.WindowMaximized)
+            is_maximized = bool(new_state & Qt.WindowState.WindowMaximized)
+            
+            # If going FROM normal TO maximized (Aero Snap), save geometry
+            if not was_maximized and is_maximized:
+                # Use normalGeometry() which Qt maintains
+                normal_geo = self.normalGeometry()
+                if normal_geo.isValid() and normal_geo.width() > 100:
+                    self._normal_geometry = normal_geo
+            
+            # Update state and icon
+            self._maximized_state = is_maximized
+            self._update_maximize_icon()
         super().changeEvent(event)
     
     def closeEvent(self, event: QCloseEvent) -> None:
