@@ -53,12 +53,15 @@ If you want to run from source:
 Click "Advanced Options" to:
 - Select target platforms (Win64, Win32, Mac, Linux)
 - Configure build parameters
-- Add/scan Unreal Engine installations
-- Change interface language
 
 ![Advanced Options](screenshots/advanced_options.png)
 
 ## Settings
+![Settings](screenshots/settings1.png)
+- Add/scan Unreal Engine installations
+
+![Settings](screenshots/settings2.png)
+- Change interface language
 
 The app saves its config in:  
 `%LOCALAPPDATA%\UnrealPluginRebuilder\`
