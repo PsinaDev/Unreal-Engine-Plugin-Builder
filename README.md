@@ -25,7 +25,7 @@ This is a small desktop app that makes it easier to rebuild Unreal Engine plugin
 
 1. Download the release ZIP
 2. Extract anywhere on your PC
-3. Run `UEPluginBuilder.exe`
+3. Run `UE Plugin Builder.exe`
 
 That's it! No installation needed.
 
@@ -35,7 +35,7 @@ If you want to run from source:
 
 1. Make sure you have Python 3.8+ and PySide6
 2. Clone this repo
-3. Run `python main.py`
+3. Run `python -m ue_plugin_builder` or `python ue_plugin_builder/app.py`
 
 ## How to Use
 
@@ -57,6 +57,7 @@ Click "Advanced Options" to:
 ![Advanced Options](screenshots/advanced_options.png)
 
 ## Settings
+
 ![Settings](screenshots/settings1.png)
 - Add/scan Unreal Engine installations
 
@@ -64,12 +65,12 @@ Click "Advanced Options" to:
 - Change interface language
 
 The app saves its config in:  
-`%LOCALAPPDATA%\UnrealPluginRebuilder\`
+`%LOCALAPPDATA%\UEPluginBuilder\`
 
 ## Troubleshooting
 
 ### No Engines Found?
-Use "Advanced Options > Add Unreal Engine..." to manually add your UE installation.
+Use Settings > Engines tab to manually add your UE installation or click "Scan" to auto-detect.
 
 ### Build Errors?
 Check the console output for error messages. Make sure your plugin is compatible with the target engine version.
@@ -80,23 +81,39 @@ Feel free to open an issue on GitHub.
 ## Project Structure
 
 ```
-ue-plugin-builder/
-├── backend/                # Backend logic
-│   ├── engine_finder.py    # UE installation detection
-│   └── plugin_builder.py   # Plugin build process
-├── frontend/               # UI components
-│   ├── advanced_options_dialog.py
-│   ├── console_widget.py
-│   ├── localization.py
-│   ├── main_window.py
-│   └── manual_engine_dialog.py
-└── main.py                 # Application entry point
+ue_plugin_builder/
+├── core/                       # Core logic (no Qt dependencies)
+│   ├── config.py               # Configuration management
+│   ├── engine_finder.py        # UE installation detection
+│   ├── localization.py         # i18n support (EN/RU)
+│   ├── platform_utils.py       # Cross-platform utilities
+│   ├── plugin_builder.py       # Plugin build process
+│   └── types.py                # Data types and models
+├── ui/                         # UI components (PySide6)
+│   ├── dialogs/                # Dialog windows
+│   │   ├── advanced_options.py # Build options dialog
+│   │   ├── command_dialog.py   # Command preview dialog
+│   │   ├── engine_entry.py     # Engine management dialog
+│   │   ├── message_dialog.py   # Custom styled dialogs
+│   │   └── settings_dialog.py  # Settings dialog
+│   ├── widgets/                # Reusable widgets
+│   │   ├── console_widget.py   # Build console with syntax highlighting
+│   │   ├── drop_overlay.py     # Drag-and-drop overlay
+│   │   ├── info_card.py        # Plugin info display
+│   │   ├── path_input.py       # Path input with browse button
+│   │   ├── scrolling_label.py  # Animated text overflow
+│   │   └── status_badge.py     # Status indicator
+│   ├── icons.py                # SVG icon system
+│   ├── main_window.py          # Main application window
+│   └── styles.py               # UI styling and colors
+├── app.py                      # Application entry point
+└── ue_plugin_builder.spec      # PyInstaller build spec
 ```
 
 ## Adding More Languages
 
-1. Edit `localization.py` to add new language entries
-2. Or manually edit `%LOCALAPPDATA%\UnrealPluginRebuilder\localization_config.json`
+1. Edit `core/localization.py` to add new language entries
+2. Or load a custom JSON locale file via Settings > Language
 
 ## License
 
