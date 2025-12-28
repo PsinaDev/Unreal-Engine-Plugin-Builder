@@ -5,7 +5,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizeGrip,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject, QPoint, QRect, QSize
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject, QPoint, QRect, QSize, QEvent
 from PySide6.QtGui import QCloseEvent, QPixmap, QCursor, QIcon
 
 from .styles import COLORS, FONTS, RADIUS, get_main_stylesheet
@@ -477,6 +477,10 @@ class MainWindow(QMainWindow):
         self._resize_start_pos: Optional[QPoint] = None
         self._resize_start_geometry: Optional[QRect] = None
         
+        # Manual maximize state tracking (FramelessWindowHint can mess with isMaximized())
+        self._is_maximized: bool = False
+        self._normal_geometry: Optional[QRect] = None
+        
         self._setup_window()
         self._setup_ui()
         self._connect_signals()
@@ -690,16 +694,37 @@ class MainWindow(QMainWindow):
     
     def _toggle_maximize(self) -> None:
         """Toggle window maximize state."""
-        if self.isMaximized():
-            self.showNormal()
+        if self._is_maximized:
+            # Restore to normal
+            self._is_maximized = False
+            if self._normal_geometry:
+                self.setGeometry(self._normal_geometry)
+            else:
+                self.showNormal()
             self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
         else:
-            self.showMaximized()
+            # Maximize
+            self._normal_geometry = self.geometry()
+            self._is_maximized = True
+            # Get available screen geometry (excluding taskbar)
+            screen = QApplication.primaryScreen()
+            if screen:
+                available = screen.availableGeometry()
+                self.setGeometry(available)
+            else:
+                self.showMaximized()
             self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
+    
+    def _update_maximize_icon(self) -> None:
+        """Update maximize button icon based on current window state."""
+        if self._is_maximized:
+            self._maximize_btn.setIcon(Icons.get_icon("MAXIMIZE_2", 12, COLORS['text_dim']))
+        else:
+            self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
     
     def _get_resize_edge(self, pos: QPoint) -> Optional[str]:
         """Determine which edge/corner for resize based on position."""
-        if self.isMaximized():
+        if self._is_maximized:
             return None
         
         rect = self.rect()
@@ -752,13 +777,32 @@ class MainWindow(QMainWindow):
             edge = self._get_resize_edge(pos)
             
             if edge:
-                # Start resize
-                self._resize_edge = edge
-                self._resize_start_pos = event.globalPosition().toPoint()
-                self._resize_start_geometry = self.geometry()
+                # Use native system resize for proper behavior
+                edges_map = {
+                    "left": Qt.Edge.LeftEdge,
+                    "right": Qt.Edge.RightEdge,
+                    "top": Qt.Edge.TopEdge,
+                    "bottom": Qt.Edge.BottomEdge,
+                    "top-left": Qt.Edge.TopEdge | Qt.Edge.LeftEdge,
+                    "top-right": Qt.Edge.TopEdge | Qt.Edge.RightEdge,
+                    "bottom-left": Qt.Edge.BottomEdge | Qt.Edge.LeftEdge,
+                    "bottom-right": Qt.Edge.BottomEdge | Qt.Edge.RightEdge,
+                }
+                qt_edges = edges_map.get(edge)
+                if qt_edges and self.windowHandle():
+                    self.windowHandle().startSystemResize(qt_edges)
+                else:
+                    # Fallback to manual resize
+                    self._resize_edge = edge
+                    self._resize_start_pos = event.globalPosition().toPoint()
+                    self._resize_start_geometry = self.geometry()
             elif hasattr(self, '_title_bar') and self._title_bar.geometry().contains(pos):
-                # Start drag
-                self._drag_pos = event.globalPosition().toPoint()
+                # Use native system move for proper Windows Snap support
+                if not self._is_maximized:
+                    self.windowHandle().startSystemMove()
+                else:
+                    # Store position for manual drag (to restore from maximized)
+                    self._drag_pos = event.globalPosition().toPoint()
         
         super().mousePressEvent(event)
     
@@ -810,10 +854,33 @@ class MainWindow(QMainWindow):
             
             self.setGeometry(geo)
         elif self._drag_pos is not None and event.buttons() == Qt.MouseButton.LeftButton:
-            # Handle drag
-            diff = event.globalPosition().toPoint() - self._drag_pos
-            self.move(self.pos() + diff)
-            self._drag_pos = event.globalPosition().toPoint()
+            # Handle drag from maximized state - restore and start system move
+            if self._is_maximized:
+                # Calculate relative position within window before restore
+                old_width = self.width()
+                cursor_x = event.globalPosition().toPoint().x()
+                relative_x = cursor_x - self.pos().x()
+                ratio = relative_x / old_width if old_width > 0 else 0.5
+                
+                # Get normal width from stored geometry
+                normal_width = self._normal_geometry.width() if self._normal_geometry else 960
+                
+                # Restore window
+                self._is_maximized = False
+                if self._normal_geometry:
+                    # Position window so cursor stays at proportional position
+                    new_x = int(cursor_x - normal_width * ratio)
+                    new_y = max(0, event.globalPosition().toPoint().y() - 20)
+                    new_geo = QRect(new_x, new_y, self._normal_geometry.width(), self._normal_geometry.height())
+                    self.setGeometry(new_geo)
+                
+                # Update icon to normal state
+                self._maximize_btn.setIcon(Icons.get_icon("SQUARE", 12, COLORS['text_dim']))
+                
+                # Clear drag pos and start native move
+                self._drag_pos = None
+                if self.windowHandle():
+                    self.windowHandle().startSystemMove()
         else:
             # Update cursor based on position
             edge = self._get_resize_edge(event.pos())
@@ -1283,6 +1350,11 @@ class MainWindow(QMainWindow):
             engines_dict = dialog.get_engines()
             self._config.save_engines(engines_dict)
             self._search_engines()
+    
+    def changeEvent(self, event: QEvent) -> None:
+        """Handle window state changes (maximize via Windows snap, etc.)."""
+        # Note: We use manual _is_maximized tracking, so changeEvent just calls parent
+        super().changeEvent(event)
     
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close."""
