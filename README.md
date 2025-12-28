@@ -1,4 +1,7 @@
 # Unreal-Engine-Plugin-Builder
+
+**[Русский](README-RU.md)** | English
+
 A simple GUI tool for rebuilding UE plugins on Windows using RunUAT
 
 ![UE Plugin Builder Main Interface](screenshots/main_interface.png)
@@ -90,7 +93,7 @@ ue-plugin-builder/
 ## Adding More Languages
 
 1. Edit `localization.py` to add new language entries
-2. Or manually edit `%LOCALAPPDATA%\UnrealPluginBuilder\localization_config.json`
+2. Or manually edit `%LOCALAPPDATA%\UnrealPluginRebuilder\localization_config.json`
 
 ## License
 

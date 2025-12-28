@@ -1,4 +1,7 @@
 # Unreal-Engine-Plugin-Builder
+
+Русский | **[English](README.md)**
+
 Простой графический инструмент для пересборки плагинов UE на Windows с использованием RunUAT
 
 ![Интерфейс UE Plugin Builder](screenshots/main_interface.png)
@@ -90,7 +93,7 @@ ue-plugin-builder/
 ## Добавление новых языков
 
 1. Отредактируйте `localization.py`, чтобы добавить новые языковые записи
-2. Или вручную отредактируйте `%LOCALAPPDATA%\UnrealPluginBuilder\localization_config.json`
+2. Или вручную отредактируйте `%LOCALAPPDATA%\UnrealPluginRebuilder\localization_config.json`
 
 ## Лицензия
 
