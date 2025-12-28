@@ -2,9 +2,21 @@
 SVG Icons from Lucide icon set.
 All icons are stored as SVG strings for easy coloring and scaling.
 """
+import os
+import tempfile
+from pathlib import Path
 
 # Base SVG wrapper - use format() to set size and color
 _SVG_TEMPLATE = '''<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{path}</svg>'''
+
+# Custom SVG templates for form controls (not using stroke template)
+_RADIO_CHECKED = '''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><circle cx="9" cy="9" r="8" fill="none" stroke="{border}" stroke-width="2"/><circle cx="9" cy="9" r="4" fill="{fill}"/></svg>'''
+_RADIO_UNCHECKED = '''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><circle cx="9" cy="9" r="8" fill="none" stroke="{border}" stroke-width="2"/></svg>'''
+_CHECKBOX_CHECKED = '''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><rect x="1" y="1" width="16" height="16" rx="4" fill="none" stroke="{border}" stroke-width="2"/><rect x="5" y="5" width="8" height="8" rx="1" fill="{fill}"/></svg>'''
+_CHECKBOX_UNCHECKED = '''<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><rect x="1" y="1" width="16" height="16" rx="4" fill="none" stroke="{border}" stroke-width="2"/></svg>'''
+
+# Cache for indicator icon paths
+_indicator_icon_cache = {}
 
 
 class Icons:
@@ -139,3 +151,49 @@ class Icons:
         from PySide6.QtGui import QIcon
         pixmap = cls.get_pixmap(name, size, color)
         return QIcon(pixmap)
+
+
+def get_indicator_icon_path(indicator_type: str, border_color: str, fill_color: str = None) -> str:
+    """
+    Get path to indicator icon for use in stylesheets.
+    Creates SVG file in temp directory and caches path.
+    
+    Args:
+        indicator_type: One of 'radio_checked', 'radio_unchecked', 'checkbox_checked', 'checkbox_unchecked'
+        border_color: Border color (hex)
+        fill_color: Fill color for checked state (hex), ignored for unchecked
+    
+    Returns:
+        Path to SVG file (forward slashes for Qt stylesheet compatibility)
+    """
+    cache_key = f"{indicator_type}_{border_color}_{fill_color}"
+    
+    if cache_key in _indicator_icon_cache:
+        return _indicator_icon_cache[cache_key]
+    
+    templates = {
+        'radio_checked': _RADIO_CHECKED,
+        'radio_unchecked': _RADIO_UNCHECKED,
+        'checkbox_checked': _CHECKBOX_CHECKED,
+        'checkbox_unchecked': _CHECKBOX_UNCHECKED,
+    }
+    
+    template = templates.get(indicator_type)
+    if not template:
+        return ""
+    
+    svg_content = template.format(border=border_color, fill=fill_color or border_color)
+    
+    # Create temp directory for icons if needed
+    temp_dir = Path(tempfile.gettempdir()) / "ue_plugin_builder_icons"
+    temp_dir.mkdir(exist_ok=True)
+    
+    # Save SVG file
+    svg_path = temp_dir / f"{cache_key.replace('#', '')}.svg"
+    svg_path.write_text(svg_content)
+    
+    # Convert to forward slashes for Qt
+    path_str = str(svg_path).replace("\\", "/")
+    _indicator_icon_cache[cache_key] = path_str
+    
+    return path_str

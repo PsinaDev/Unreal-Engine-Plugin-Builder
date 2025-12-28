@@ -134,11 +134,13 @@ class InfoCard(QWidget):
     - Header with title
     - Scrollable content area
     - Multiple sections
-    - Empty state placeholder
+    - Empty state placeholder (compact)
+    - Expanded state when plugin loaded
     """
     
-    # Minimum height for the info card
-    MIN_HEIGHT = 280
+    # Heights for different states
+    COMPACT_HEIGHT = 80  # When no plugin loaded (header + placeholder text)
+    EXPANDED_HEIGHT = 280  # When plugin loaded
     
     def __init__(
         self,
@@ -148,7 +150,9 @@ class InfoCard(QWidget):
         super().__init__(parent)
         self._title = title
         self._content_widget: Optional[QWidget] = None
-        self.setMinimumHeight(self.MIN_HEIGHT)
+        self._is_expanded = False
+        self.setMinimumHeight(self.COMPACT_HEIGHT)
+        self.setMaximumHeight(self.COMPACT_HEIGHT)
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -172,8 +176,8 @@ class InfoCard(QWidget):
         card_layout.setSpacing(0)
         
         # Header
-        header = QFrame()
-        header.setStyleSheet(f"""
+        self._header = QFrame()
+        self._header.setStyleSheet(f"""
             QFrame {{
                 background-color: rgba(39, 39, 42, 0.5);
                 border: none;
@@ -182,7 +186,7 @@ class InfoCard(QWidget):
                 border-top-right-radius: {RADIUS['lg']};
             }}
         """)
-        header_layout = QHBoxLayout(header)
+        header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(16, 10, 16, 10)
         
         self._title_label = QLabel(self._title)
@@ -195,13 +199,14 @@ class InfoCard(QWidget):
         header_layout.addWidget(self._title_label)
         header_layout.addStretch()
         
-        card_layout.addWidget(header)
+        card_layout.addWidget(self._header)
         
         # Scroll area for content
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Hidden in compact mode
+        self._scroll.setStyleSheet(f"""
             QScrollArea {{
                 background: transparent;
                 border: none;
@@ -215,7 +220,7 @@ class InfoCard(QWidget):
         self._content = QWidget()
         self._content.setStyleSheet("background: transparent;")
         self._content_layout = QVBoxLayout(self._content)
-        self._content_layout.setContentsMargins(16, 16, 16, 16)
+        self._content_layout.setContentsMargins(16, 12, 16, 12)
         self._content_layout.setSpacing(16)
         
         # Empty state
@@ -225,12 +230,13 @@ class InfoCard(QWidget):
             font-size: {FONTS['size_sm']};
             font-style: italic;
             background: transparent;
+            border: none;
         """)
         self._content_layout.addWidget(self._empty_label)
         self._content_layout.addStretch()
         
-        scroll.setWidget(self._content)
-        card_layout.addWidget(scroll)
+        self._scroll.setWidget(self._content)
+        card_layout.addWidget(self._scroll)
         
         layout.addWidget(self._card)
     
@@ -243,6 +249,9 @@ class InfoCard(QWidget):
         """
         self.clear_items()
         self._empty_label.setVisible(False)
+        
+        # Expand card when plugin info is set
+        self._set_expanded(True)
         
         # Container for all sections
         self._content_widget = QWidget()
@@ -366,13 +375,27 @@ class InfoCard(QWidget):
         self._content_layout.insertWidget(0, self._content_widget)
     
     def clear_items(self) -> None:
-        """Clear all items."""
+        """Clear all items and collapse card."""
         if self._content_widget:
             self._content_widget.setParent(None)
             self._content_widget.deleteLater()
             self._content_widget = None
         
         self._empty_label.setVisible(True)
+        # Collapse card when cleared
+        self._set_expanded(False)
+    
+    def _set_expanded(self, expanded: bool) -> None:
+        """Set card expanded or collapsed state."""
+        self._is_expanded = expanded
+        if expanded:
+            self.setMinimumHeight(self.EXPANDED_HEIGHT)
+            self.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+            self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        else:
+            self.setMinimumHeight(self.COMPACT_HEIGHT)
+            self.setMaximumHeight(self.COMPACT_HEIGHT)
+            self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     
     def set_title(self, title: str) -> None:
         """Set the card title."""

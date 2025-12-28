@@ -79,6 +79,16 @@ SPACING = {
 
 def get_main_stylesheet() -> str:
     """Generate the main application stylesheet."""
+    from .icons import get_indicator_icon_path
+    
+    # Generate indicator icon paths
+    radio_unchecked = get_indicator_icon_path('radio_unchecked', COLORS['text_dim'])
+    radio_unchecked_hover = get_indicator_icon_path('radio_unchecked', COLORS['text_muted'])
+    radio_checked = get_indicator_icon_path('radio_checked', COLORS['accent_primary'], COLORS['accent_primary'])
+    checkbox_unchecked = get_indicator_icon_path('checkbox_unchecked', COLORS['text_dim'])
+    checkbox_unchecked_hover = get_indicator_icon_path('checkbox_unchecked', COLORS['text_muted'])
+    checkbox_checked = get_indicator_icon_path('checkbox_checked', COLORS['accent_primary'], COLORS['accent_primary'])
+    
     return f"""
         /* ===== GLOBAL ===== */
         * {{
@@ -275,16 +285,15 @@ def get_main_stylesheet() -> str:
         QRadioButton::indicator {{
             width: 18px;
             height: 18px;
-            border-radius: 9px;
-            border: 2px solid {COLORS['text_dim']};
-            background: transparent;
+        }}
+        QRadioButton::indicator:unchecked {{
+            image: url("{radio_unchecked}");
         }}
         QRadioButton::indicator:checked {{
-            border-color: {COLORS['accent_primary']};
-            background-color: {COLORS['accent_primary']};
+            image: url("{radio_checked}");
         }}
-        QRadioButton::indicator:hover {{
-            border-color: {COLORS['text_muted']};
+        QRadioButton::indicator:unchecked:hover {{
+            image: url("{radio_unchecked_hover}");
         }}
         
         /* ===== CHECK BOXES ===== */
@@ -298,16 +307,15 @@ def get_main_stylesheet() -> str:
         QCheckBox::indicator {{
             width: 18px;
             height: 18px;
-            border-radius: {RADIUS['sm']};
-            border: 2px solid {COLORS['text_dim']};
-            background: transparent;
+        }}
+        QCheckBox::indicator:unchecked {{
+            image: url("{checkbox_unchecked}");
         }}
         QCheckBox::indicator:checked {{
-            border-color: {COLORS['accent_primary']};
-            background-color: {COLORS['accent_primary']};
+            image: url("{checkbox_checked}");
         }}
-        QCheckBox::indicator:hover {{
-            border-color: {COLORS['text_muted']};
+        QCheckBox::indicator:unchecked:hover {{
+            image: url("{checkbox_unchecked_hover}");
         }}
         
         /* ===== TEXT EDIT (Console) ===== */

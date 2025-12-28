@@ -26,6 +26,12 @@ class StyledCheckBox(QCheckBox):
     
     def __init__(self, text: str, parent: Optional[QWidget] = None):
         super().__init__(text, parent)
+        from ..icons import get_indicator_icon_path
+        
+        checkbox_unchecked = get_indicator_icon_path('checkbox_unchecked', COLORS['text_dim'])
+        checkbox_unchecked_hover = get_indicator_icon_path('checkbox_unchecked', COLORS['text_muted'])
+        checkbox_checked = get_indicator_icon_path('checkbox_checked', COLORS['accent_primary'], COLORS['accent_primary'])
+        
         self.setStyleSheet(f"""
             QCheckBox {{
                 background: transparent;
@@ -38,16 +44,15 @@ class StyledCheckBox(QCheckBox):
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-                border-radius: {RADIUS['sm']};
-                border: 2px solid {COLORS['text_dim']};
-                background: transparent;
+            }}
+            QCheckBox::indicator:unchecked {{
+                image: url("{checkbox_unchecked}");
             }}
             QCheckBox::indicator:checked {{
-                border-color: {COLORS['accent_primary']};
-                background-color: {COLORS['accent_primary']};
+                image: url("{checkbox_checked}");
             }}
-            QCheckBox::indicator:hover {{
-                border-color: {COLORS['text_muted']};
+            QCheckBox::indicator:unchecked:hover {{
+                image: url("{checkbox_unchecked_hover}");
             }}
         """)
 
