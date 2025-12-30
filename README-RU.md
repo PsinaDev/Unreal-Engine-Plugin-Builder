@@ -35,7 +35,7 @@
 
 1. Убедитесь, что у вас есть Python 3.8+ и PySide6
 2. Клонируйте репозиторий
-3. Запустите `python -m ue_plugin_builder` или `python ue_plugin_builder/app.py`
+3. Запустите `python -m source` или `python source/app.py`
 
 ## Как использовать
 
