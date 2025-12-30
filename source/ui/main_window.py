@@ -682,7 +682,7 @@ class MainWindow(QMainWindow):
         # Status badge
         self._status_badge = StatusBadge(status="idle", text=tr("ready"))
         layout.addWidget(self._status_badge)
-        
+
         # Settings button
         settings_btn = QPushButton()
         settings_btn.setIcon(Icons.get_icon("SETTINGS", 16, COLORS['text_dim']))
@@ -690,15 +690,16 @@ class MainWindow(QMainWindow):
         settings_btn.setToolTip(tr("settings"))
         settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
-                border-radius: 4px;
-            }}
-            QPushButton:hover {{
-                background-color: {COLORS['bg_tertiary']};
-            }}
-        """)
+                    QPushButton {{
+                        background: transparent;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 6px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {COLORS['bg_tertiary']};
+                    }}
+                """)
         settings_btn.clicked.connect(self._show_settings)
         layout.addWidget(settings_btn)
         
@@ -1386,22 +1387,22 @@ class MainWindow(QMainWindow):
             engines_dict = dialog.get_engines()
             self._config.save_engines(engines_dict)
             self._search_engines()
-    
+
     def nativeEvent(self, eventType, message):
         """
         Handle native Windows messages for Aero Snap support.
         """
         if sys.platform != "win32":
             return super().nativeEvent(eventType, message)
-        
+
         # Check if this is a Windows message
         if eventType != b"windows_generic_MSG":
             return super().nativeEvent(eventType, message)
-        
+
         try:
             import ctypes
             from ctypes import wintypes
-            
+
             # Define MSG structure
             class MSG(ctypes.Structure):
                 _fields_ = [
@@ -1412,49 +1413,65 @@ class MainWindow(QMainWindow):
                     ("time", wintypes.DWORD),
                     ("pt", wintypes.POINT),
                 ]
-            
+
             # Get message from pointer
             msg = MSG.from_address(int(message))
-            
+
             # Handle WM_NCCALCSIZE - make client area cover entire window
             if msg.message == WM_NCCALCSIZE:
                 # Return 0 to remove all non-client area (frame, title bar)
                 # This makes our custom title bar work
                 return True, 0
-            
+
             # Handle WM_NCHITTEST
             if msg.message == WM_NCHITTEST:
-                # Get cursor position in screen coordinates
-                x = msg.lParam & 0xFFFF
-                y = (msg.lParam >> 16) & 0xFFFF
-                
+                # Get cursor position in screen coordinates (physical pixels)
+                x_phys = msg.lParam & 0xFFFF
+                y_phys = (msg.lParam >> 16) & 0xFFFF
+
                 # Handle signed 16-bit values
-                if x > 32767:
-                    x -= 65536
-                if y > 32767:
-                    y -= 65536
-                
-                # Get window rect
+                if x_phys > 32767:
+                    x_phys -= 65536
+                if y_phys > 32767:
+                    y_phys -= 65536
+
+                # Get DPI scale factor
+                dpr = self.devicePixelRatio()
+
+                # Convert to logical coordinates for Qt
+                x_logical = int(x_phys / dpr)
+                y_logical = int(y_phys / dpr)
+
+                # Check if cursor is over an interactive widget FIRST
+                widget_at_pos = QApplication.widgetAt(x_logical, y_logical)
+                if widget_at_pos is not None:
+                    w_check = widget_at_pos
+                    while w_check is not None and w_check is not self:
+                        if isinstance(w_check, QPushButton):
+                            return True, HTCLIENT
+                        w_check = w_check.parentWidget()
+
+                # Get window rect (physical pixels)
                 hwnd = int(self.winId())
                 rect = wintypes.RECT()
                 ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
-                
-                # Convert to window-relative coordinates
-                rel_x = x - rect.left
-                rel_y = y - rect.top
+
+                # Convert to window-relative coordinates (physical pixels)
+                rel_x = x_phys - rect.left
+                rel_y = y_phys - rect.top
                 w = rect.right - rect.left
                 h = rect.bottom - rect.top
-                
-                # Border margin for resize (in pixels)
-                border = 8
-                
-                # Title bar height
-                title_height = 40
-                
+
+                # Border margin for resize (in physical pixels)
+                border = int(8 * dpr)
+
+                # Title bar height (in physical pixels)
+                title_height = int(40 * dpr)
+
                 # Check resize edges (only when not maximized)
                 win_state = self.windowState()
                 is_maximized = bool(win_state & Qt.WindowState.WindowMaximized)
-                
+
                 if not is_maximized:
                     # Corners first
                     if rel_x < border and rel_y < border:
@@ -1465,7 +1482,7 @@ class MainWindow(QMainWindow):
                         return True, HTBOTTOMLEFT
                     if rel_x > w - border and rel_y > h - border:
                         return True, HTBOTTOMRIGHT
-                    
+
                     # Edges
                     if rel_x < border:
                         return True, HTLEFT
@@ -1475,17 +1492,16 @@ class MainWindow(QMainWindow):
                         return True, HTTOP
                     if rel_y > h - border:
                         return True, HTBOTTOM
-                
-                # Title bar (excluding right side where buttons are)
-                buttons_width = 100
-                if rel_y < title_height and rel_x < w - buttons_width:
+
+                # Title bar area for dragging
+                if rel_y < title_height:
                     return True, HTCAPTION
-                
+
                 return True, HTCLIENT
-                
+
         except Exception as e:
             print(f"nativeEvent error: {e}")
-        
+
         return super().nativeEvent(eventType, message)
     
     def changeEvent(self, event: QEvent) -> None:
