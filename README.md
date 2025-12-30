@@ -35,7 +35,7 @@ If you want to run from source:
 
 1. Make sure you have Python 3.8+ and PySide6
 2. Clone this repo
-3. Run `python -m ue_plugin_builder` or `python ue_plugin_builder/app.py`
+3. Run `python -m source` or `python source/app.py`
 
 ## How to Use
 
