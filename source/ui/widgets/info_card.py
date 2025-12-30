@@ -18,22 +18,23 @@ from ue_plugin_builder.core import PluginInfo, tr
 
 class InfoRow(QWidget):
     """Single row of information with label and value."""
-    
+
     def __init__(
-        self,
-        label: str,
-        value: str,
-        value_color: str = None,
-        is_tag: bool = False,
-        parent: Optional[QWidget] = None,
+            self,
+            label: str,
+            value: str,
+            value_color: str = None,
+            is_tag: bool = False,
+            is_link: bool = False,
+            parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self.setStyleSheet("background: transparent;")
-        
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        
+
         label_widget = QLabel(label)
         label_widget.setStyleSheet(f"""
             color: {COLORS['text_dim']};
@@ -42,7 +43,7 @@ class InfoRow(QWidget):
         """)
         label_widget.setMinimumWidth(100)
         layout.addWidget(label_widget)
-        
+
         if is_tag and value:
             # Show as tag/badge
             tag_container = QWidget()
@@ -50,7 +51,7 @@ class InfoRow(QWidget):
             tag_layout = QHBoxLayout(tag_container)
             tag_layout.setContentsMargins(0, 0, 0, 0)
             tag_layout.setSpacing(6)
-            
+
             tags = value.split(", ") if ", " in value else [value]
             for tag_text in tags[:5]:  # Limit to 5 tags
                 tag = QLabel(tag_text)
@@ -63,7 +64,7 @@ class InfoRow(QWidget):
                     border-radius: 4px;
                 """)
                 tag_layout.addWidget(tag)
-            
+
             if len(tags) > 5:
                 more = QLabel(f"+{len(tags) - 5}")
                 more.setStyleSheet(f"""
@@ -72,9 +73,21 @@ class InfoRow(QWidget):
                     background: transparent;
                 """)
                 tag_layout.addWidget(more)
-            
+
             tag_layout.addStretch()
             layout.addWidget(tag_container, 1)
+        elif is_link and value:
+            # Show as clickable link
+            value_widget = QLabel(f'<a href="{value}" style="color: {COLORS["accent_primary"]};">{value}</a>')
+            value_widget.setOpenExternalLinks(True)
+            value_widget.setCursor(Qt.CursorShape.PointingHandCursor)
+            value_widget.setStyleSheet(f"""
+                font-size: {FONTS['size_sm']};
+                font-family: {FONTS['family_mono']};
+                background: transparent;
+            """)
+            value_widget.setWordWrap(True)
+            layout.addWidget(value_widget, 1)
         else:
             value_widget = QLabel(value or "—")
             color = value_color or COLORS['text_secondary']
@@ -90,20 +103,20 @@ class InfoRow(QWidget):
 
 class InfoSection(QWidget):
     """Section with title and rows."""
-    
+
     def __init__(
-        self,
-        title: str,
-        rows: List[Tuple[str, str, Optional[str], bool]],
-        parent: Optional[QWidget] = None,
+            self,
+            title: str,
+            rows: List[Tuple],
+            parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
         self.setStyleSheet("background: transparent;")
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-        
+
         # Section title
         title_label = QLabel(title)
         title_label.setStyleSheet(f"""
@@ -116,13 +129,14 @@ class InfoSection(QWidget):
             padding-bottom: 4px;
         """)
         layout.addWidget(title_label)
-        
+
         # Rows
         for row_data in rows:
             label, value = row_data[0], row_data[1]
             color = row_data[2] if len(row_data) > 2 else None
             is_tag = row_data[3] if len(row_data) > 3 else False
-            row = InfoRow(label, value, color, is_tag)
+            is_link = row_data[4] if len(row_data) > 4 else False
+            row = InfoRow(label, value, color, is_tag, is_link)
             layout.addWidget(row)
 
 
@@ -239,27 +253,27 @@ class InfoCard(QWidget):
         card_layout.addWidget(self._scroll)
         
         layout.addWidget(self._card)
-    
+
     def set_plugin_info(self, info: PluginInfo) -> None:
         """
         Set plugin information to display.
-        
+
         Args:
             info: PluginInfo object with all plugin data
         """
         self.clear_items()
         self._empty_label.setVisible(False)
-        
+
         # Expand card when plugin info is set
         self._set_expanded(True)
-        
+
         # Container for all sections
         self._content_widget = QWidget()
         self._content_widget.setStyleSheet("background: transparent;")
         sections_layout = QVBoxLayout(self._content_widget)
         sections_layout.setContentsMargins(0, 0, 0, 0)
         sections_layout.setSpacing(20)
-        
+
         # === Basic Info Section ===
         basic_rows = [
             (tr("name"), info.friendly_name),
@@ -270,79 +284,101 @@ class InfoCard(QWidget):
         ]
         if info.description:
             basic_rows.append((tr("description"), info.description))
-        
-        basic_section = InfoSection("BASIC", basic_rows)
+        if info.parent_plugin_name:
+            basic_rows.append((tr("parent_plugin"), info.parent_plugin_name))
+        if info.editor_custom_virtual_path:
+            basic_rows.append((tr("virtual_path"), info.editor_custom_virtual_path))
+
+        basic_section = InfoSection(tr("section_basic"), basic_rows)
         sections_layout.addWidget(basic_section)
-        
+
         # === Modules Section ===
         if info.modules:
             module_names = ", ".join([m.name for m in info.modules])
             module_types = ", ".join(list(set(m.type for m in info.modules)))
-            
+
             module_rows = [
                 (tr("modules"), f"{len(info.modules)}", None, False),
-                ("Types", module_types, COLORS['accent_primary'], True),
-                ("Names", module_names, None, False),
+                (tr("module_types"), module_types, COLORS['accent_primary'], True),
+                (tr("module_names"), module_names, None, False),
             ]
-            
-            modules_section = InfoSection("MODULES", module_rows)
+
+            modules_section = InfoSection(tr("section_modules"), module_rows)
             sections_layout.addWidget(modules_section)
-        
+
         # === Dependencies Section ===
         if info.plugins:
             deps = ", ".join([p.name for p in info.plugins if p.enabled])
             optional_deps = ", ".join([p.name for p in info.plugins if p.optional])
-            
+
             dep_rows = [
                 (tr("dependencies"), deps if deps else "—", None, True if deps else False),
             ]
             if optional_deps:
-                dep_rows.append(("Optional", optional_deps, COLORS['text_dim'], True))
-            
-            deps_section = InfoSection("DEPENDENCIES", dep_rows)
+                dep_rows.append((tr("optional_deps"), optional_deps, COLORS['text_dim'], True))
+
+            deps_section = InfoSection(tr("section_dependencies"), dep_rows)
             sections_layout.addWidget(deps_section)
-        
+
         # === Platforms Section ===
-        if info.supported_platforms:
-            platforms = ", ".join(info.supported_platforms)
-            platform_rows = [
-                (tr("platforms"), platforms, COLORS['success'], True),
-            ]
-            platforms_section = InfoSection("PLATFORMS", platform_rows)
+        if info.supported_platforms or info.supported_programs:
+            platform_rows = []
+            if info.supported_platforms:
+                platforms = ", ".join(info.supported_platforms)
+                platform_rows.append((tr("platforms"), platforms, COLORS['success'], True))
+            if info.supported_programs:
+                programs = ", ".join(info.supported_programs)
+                platform_rows.append((tr("supported_programs"), programs, COLORS['accent_primary'], True))
+
+            platforms_section = InfoSection(tr("section_platforms"), platform_rows)
             sections_layout.addWidget(platforms_section)
-        
+
         # === Flags Section ===
         flags = []
         if info.can_contain_content:
             flags.append((tr("content"), tr("yes"), COLORS['success']))
+        if info.can_contain_verse:
+            flags.append((tr("can_contain_verse"), tr("yes"), COLORS['success']))
         if info.is_beta_version:
             flags.append((tr("beta"), tr("yes"), COLORS['warning']))
         if info.is_experimental_version:
             flags.append((tr("experimental"), tr("yes"), COLORS['warning']))
         if info.enabled_by_default:
-            flags.append(("Enabled by default", tr("yes"), COLORS['text_muted']))
+            flags.append((tr("enabled_by_default"), tr("yes"), COLORS['success']))
+        if info.installed:
+            flags.append((tr("installed"), tr("yes"), COLORS['success']))
         if info.is_hidden:
-            flags.append(("Hidden", tr("yes"), COLORS['text_dim']))
-        
+            flags.append((tr("hidden"), tr("yes"), COLORS['warning']))
+        if info.is_sealed:
+            flags.append((tr("sealed"), tr("yes"), COLORS['warning']))
+        if info.no_code:
+            flags.append((tr("no_code"), tr("yes"), COLORS['text_secondary']))
+        if info.explicitly_loaded:
+            flags.append((tr("explicitly_loaded"), tr("yes"), COLORS['warning']))
+        if info.is_plugin_extension:
+            flags.append((tr("plugin_extension"), tr("yes"), COLORS['accent_primary']))
+        if info.requires_build_platform:
+            flags.append((tr("requires_build_platform"), tr("yes"), COLORS['warning']))
+
         if flags:
-            flags_section = InfoSection("FLAGS", flags)
+            flags_section = InfoSection(tr("section_flags"), flags)
             sections_layout.addWidget(flags_section)
-        
+
         # === URLs Section ===
         urls = []
         if info.docs_url:
-            urls.append(("Docs", info.docs_url))
+            urls.append((tr("docs_url"), info.docs_url, None, False, True))
         if info.marketplace_url:
-            urls.append(("Marketplace", info.marketplace_url))
+            urls.append((tr("marketplace_url"), info.marketplace_url, None, False, True))
         if info.support_url:
-            urls.append(("Support", info.support_url))
+            urls.append((tr("support_url"), info.support_url, None, False, True))
         if info.created_by_url:
-            urls.append(("Author URL", info.created_by_url))
-        
+            urls.append((tr("author_url"), info.created_by_url, None, False, True))
+
         if urls:
-            urls_section = InfoSection("LINKS", urls)
+            urls_section = InfoSection(tr("section_links"), urls)
             sections_layout.addWidget(urls_section)
-        
+
         sections_layout.addStretch()
         self._content_layout.insertWidget(0, self._content_widget)
     

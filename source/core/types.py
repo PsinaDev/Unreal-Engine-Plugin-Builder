@@ -68,29 +68,39 @@ class PluginInfo:
     docs_url: str
     marketplace_url: str
     support_url: str
-    
+
     # Engine info
     engine_version: str
     file_version: int
-    
+
     # Modules
     modules: List[ModuleInfo]
-    
+
     # Dependencies
     plugins: List[PluginDependency]
-    
+
     # Flags
     can_contain_content: bool
+    can_contain_verse: bool
     is_beta_version: bool
     is_experimental_version: bool
     installed: bool
     enabled_by_default: bool
     is_hidden: bool
+    is_sealed: bool
+    no_code: bool
+    explicitly_loaded: bool
+    is_plugin_extension: bool
     requires_build_platform: bool
-    
-    # Platforms
+
+    # Platforms & Programs
     supported_platforms: List[str]
-    
+    supported_programs: List[str]
+
+    # Extension
+    parent_plugin_name: str
+    editor_custom_virtual_path: str
+
     # File path
     file_path: Path
 
@@ -107,7 +117,7 @@ class PluginInfo:
                 platform_allow_list=m.get("PlatformAllowList", []),
                 platform_deny_list=m.get("PlatformDenyList", []),
             ))
-        
+
         # Parse plugin dependencies
         plugins = []
         for p in data.get("Plugins", []):
@@ -117,7 +127,14 @@ class PluginInfo:
                 optional=p.get("Optional", False),
                 description=p.get("Description", ""),
             ))
-        
+
+        # Parse EnabledByDefault (can be bool or string enum)
+        enabled_by_default_raw = data.get("EnabledByDefault", True)
+        if isinstance(enabled_by_default_raw, str):
+            enabled_by_default = enabled_by_default_raw.lower() == "enabled"
+        else:
+            enabled_by_default = bool(enabled_by_default_raw)
+
         return cls(
             name=file_path.stem,
             friendly_name=data.get("FriendlyName", data.get("Name", file_path.stem)),
@@ -135,20 +152,28 @@ class PluginInfo:
             modules=modules,
             plugins=plugins,
             can_contain_content=data.get("CanContainContent", False),
+            can_contain_verse=data.get("bCanContainVerse", False),
             is_beta_version=data.get("IsBetaVersion", False),
             is_experimental_version=data.get("IsExperimentalVersion", False),
             installed=data.get("Installed", False),
-            enabled_by_default=data.get("EnabledByDefault", True),
+            enabled_by_default=enabled_by_default,
             is_hidden=data.get("bIsHidden", False),
+            is_sealed=data.get("bIsSealed", False),
+            no_code=data.get("bNoCode", False),
+            explicitly_loaded=data.get("bExplicitlyLoaded", False),
+            is_plugin_extension=data.get("bIsPluginExtension", False),
             requires_build_platform=data.get("bRequiresBuildPlatform", False),
             supported_platforms=data.get("SupportedTargetPlatforms", []),
+            supported_programs=data.get("SupportedPrograms", []),
+            parent_plugin_name=data.get("ParentPluginName", ""),
+            editor_custom_virtual_path=data.get("EditorCustomVirtualPath", ""),
             file_path=file_path,
         )
-    
+
     def get_module_types(self) -> List[str]:
         """Get unique module types."""
         return list(set(m.type for m in self.modules))
-    
+
     def get_module_names(self) -> List[str]:
         """Get module names."""
         return [m.name for m in self.modules]
