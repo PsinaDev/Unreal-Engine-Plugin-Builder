@@ -23,9 +23,8 @@ This is a small desktop app that makes it easier to rebuild Unreal Engine plugin
 
 ### Quick Start
 
-1. Download the release ZIP
-2. Extract anywhere on your PC
-3. Run `UE Plugin Builder.exe`
+1. Download the release .EXE
+2. Run `UE Plugin Builder.exe`
 
 That's it! No installation needed.
 
