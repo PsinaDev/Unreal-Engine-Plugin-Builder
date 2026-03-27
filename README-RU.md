@@ -1,3 +1,22 @@
+# ⚠️ Этот репозиторий в архиве
+
+**Проект заменён на [UE Forge](https://github.com/PsinaDev/ue-forge)** — модульный десктопный тулкит для автоматизации работы с Unreal Engine.
+
+UE Forge включает Plugin Builder вместе с дополнительными инструментами: Renamer, Include Optimizer и Commandlet Runner — всё в едином окне с сайдбаром.
+
+### Миграция
+
+```bash
+git clone --recurse-submodules https://github.com/PsinaDev/ue-forge.git
+cd ue-forge
+pip install -r requirements.txt
+python -m ue_forge
+```
+
+Plugin Builder доступен отдельно как `python -m ue_forge.plugin_builder`.
+
+---
+
 # Unreal-Engine-Plugin-Builder
 
 Русский | **[English](README.md)**
@@ -66,54 +85,6 @@
 
 Приложение сохраняет конфигурацию в:  
 `%LOCALAPPDATA%\UEPluginBuilder\`
-
-## Решение проблем
-
-### Не найдены движки?
-Используйте Настройки > вкладка «Движки», чтобы вручную добавить установку UE или нажмите «Сканировать» для автоопределения.
-
-### Ошибки сборки?
-Проверьте вывод консоли на наличие сообщений об ошибках. Убедитесь, что ваш плагин совместим с целевой версией движка.
-
-### Другие проблемы?
-Не стесняйтесь открыть issue на GitHub.
-
-## Структура проекта
-
-```
-ue_plugin_builder/
-├── core/                       # Бизнес-логика (без зависимостей от Qt)
-│   ├── config.py               # Управление конфигурацией
-│   ├── engine_finder.py        # Обнаружение установок UE
-│   ├── localization.py         # Поддержка локализации (EN/RU)
-│   ├── platform_utils.py       # Кроссплатформенные утилиты
-│   ├── plugin_builder.py       # Процесс сборки плагина
-│   └── types.py                # Типы данных и модели
-├── ui/                         # Компоненты UI (PySide6)
-│   ├── dialogs/                # Диалоговые окна
-│   │   ├── advanced_options.py # Диалог параметров сборки
-│   │   ├── command_dialog.py   # Диалог предпросмотра команды
-│   │   ├── engine_entry.py     # Диалог управления движками
-│   │   ├── message_dialog.py   # Кастомные диалоги сообщений
-│   │   └── settings_dialog.py  # Диалог настроек
-│   ├── widgets/                # Переиспользуемые виджеты
-│   │   ├── console_widget.py   # Консоль с подсветкой синтаксиса
-│   │   ├── drop_overlay.py     # Оверлей drag-and-drop
-│   │   ├── info_card.py        # Отображение инфо о плагине
-│   │   ├── path_input.py       # Ввод пути с кнопкой обзора
-│   │   ├── scrolling_label.py  # Анимированный текст
-│   │   └── status_badge.py     # Индикатор статуса
-│   ├── icons.py                # Система SVG-иконок
-│   ├── main_window.py          # Главное окно приложения
-│   └── styles.py               # Стили и цвета UI
-├── app.py                      # Точка входа приложения
-└── ue_plugin_builder.spec      # Spec-файл PyInstaller
-```
-
-## Добавление новых языков
-
-1. Отредактируйте `core/localization.py`, чтобы добавить новые языковые записи
-2. Или загрузите пользовательский JSON-файл локализации через Настройки > Язык
 
 ## Лицензия
 
