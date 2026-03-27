@@ -1,3 +1,22 @@
+# ⚠️ This repository is archived
+
+**This project has been superseded by [UE Forge](https://github.com/PsinaDev/ue-forge)** — a modular desktop toolkit for Unreal Engine automation.
+
+UE Forge includes the Plugin Builder along with additional tools: Renamer, Include Optimizer, and Commandlet Runner — all in a single host window with a sidebar interface.
+
+### Migration
+
+```bash
+git clone --recurse-submodules https://github.com/PsinaDev/ue-forge.git
+cd ue-forge
+pip install -r requirements.txt
+python -m ue_forge
+```
+
+The Plugin Builder is available as `python -m ue_forge.plugin_builder` for standalone use.
+
+---
+
 # Unreal-Engine-Plugin-Builder
 
 **[Русский](README-RU.md)** | English
@@ -23,8 +42,9 @@ This is a small desktop app that makes it easier to rebuild Unreal Engine plugin
 
 ### Quick Start
 
-1. Download the release .EXE
-2. Run `UE Plugin Builder.exe`
+1. Download the release ZIP
+2. Extract anywhere on your PC
+3. Run `UE Plugin Builder.exe`
 
 That's it! No installation needed.
 
@@ -65,54 +85,6 @@ Click "Advanced Options" to:
 
 The app saves its config in:  
 `%LOCALAPPDATA%\UEPluginBuilder\`
-
-## Troubleshooting
-
-### No Engines Found?
-Use Settings > Engines tab to manually add your UE installation or click "Scan" to auto-detect.
-
-### Build Errors?
-Check the console output for error messages. Make sure your plugin is compatible with the target engine version.
-
-### Other Issues?
-Feel free to open an issue on GitHub.
-
-## Project Structure
-
-```
-ue_plugin_builder/
-├── core/                       # Core logic (no Qt dependencies)
-│   ├── config.py               # Configuration management
-│   ├── engine_finder.py        # UE installation detection
-│   ├── localization.py         # i18n support (EN/RU)
-│   ├── platform_utils.py       # Cross-platform utilities
-│   ├── plugin_builder.py       # Plugin build process
-│   └── types.py                # Data types and models
-├── ui/                         # UI components (PySide6)
-│   ├── dialogs/                # Dialog windows
-│   │   ├── advanced_options.py # Build options dialog
-│   │   ├── command_dialog.py   # Command preview dialog
-│   │   ├── engine_entry.py     # Engine management dialog
-│   │   ├── message_dialog.py   # Custom styled dialogs
-│   │   └── settings_dialog.py  # Settings dialog
-│   ├── widgets/                # Reusable widgets
-│   │   ├── console_widget.py   # Build console with syntax highlighting
-│   │   ├── drop_overlay.py     # Drag-and-drop overlay
-│   │   ├── info_card.py        # Plugin info display
-│   │   ├── path_input.py       # Path input with browse button
-│   │   ├── scrolling_label.py  # Animated text overflow
-│   │   └── status_badge.py     # Status indicator
-│   ├── icons.py                # SVG icon system
-│   ├── main_window.py          # Main application window
-│   └── styles.py               # UI styling and colors
-├── app.py                      # Application entry point
-└── ue_plugin_builder.spec      # PyInstaller build spec
-```
-
-## Adding More Languages
-
-1. Edit `core/localization.py` to add new language entries
-2. Or load a custom JSON locale file via Settings > Language
 
 ## License
 
